@@ -1,0 +1,8 @@
+SetBarsRequired(10000,0);
+#include "..\indicators\ind_harmonic_core.afl"
+
+ind_harm_has      = cjvn_harm_hasPattern();
+ind_harm_id       = cjvn_harm_lastPatternId();
+ind_harm_dir      = cjvn_harm_direction();
+ind_harm_prz_low  = cjvn_harm_prz_low();
+ind_harm_prz_high = cjvn_harm_prz_high();
