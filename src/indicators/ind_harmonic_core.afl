@@ -1,0 +1,6 @@
+function cjvn_harm_lastPatternId() { return 0; }
+function cjvn_harm_hasPattern()    { return 0; }
+function cjvn_harm_direction()     { return 0; }
+function cjvn_harm_prz_low()       { return Null; }
+function cjvn_harm_prz_high()      { return Null; }
+function cjvn_harm_completionBar() { return Null; }
