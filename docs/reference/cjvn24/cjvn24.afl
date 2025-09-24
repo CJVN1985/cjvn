@@ -1,0 +1,299 @@
+// ================== CJVN Telegram Drop-In (FIXED ONE-FILE) v2.4 ==================
+_SECTION_BEGIN("CJVN Telegram Drop-In v2.4");
+
+// ===== [A] OPTIONS =====
+TG_API    = ParamStr ("Telegram Bot API Token",   "7860235529:AAEdu_a_inL3O92Fh3AHm88KIHy-0ag1YFo");
+TG_CHAT   = ParamStr ("Telegram Chat/Group ID",   "-1002775328367");
+TG_Enable = ParamToggle("Enable Alerts",          "No|Yes", 1);
+
+TG_TestBtn    = ParamTrigger("Send Test",         "Click");
+TG_TestEnable = ParamToggle("Enable Test Mode",   "No|Yes", 0);
+
+UseTestSignals = ParamToggle("Use Internal Test Signals", "No|Yes", 0);
+
+TG_RefreshSecs = Param("Timed Refresh (secs)", 2, 0, 3600, 1);
+TG_MinGapSecs  = Param("Min Seconds Between Alerts", 2, 0, 3600, 1);
+
+TG_TriggerMode = ParamList("Trigger Mode", "Rising|Continuous", 0); // 0=Rising
+
+
+// B? khung gi?: luôn cho phép (theo yêu c?u)
+function TG_InWindow() { return 1; }
+
+TG_RateScope = ParamList("Rate Scope", "PerSide|Global", 0);
+
+TG_Prefix   = ParamStr("Custom Prefix", "? CJVN 2.4 Alert ");
+TG_Template = ParamStr("Message Template",
+            "{SIDE} {SYMBOL} @ {PRICE}\nTF: {TF}m\nTime: {TIME}");
+TG_UseHTML  = ParamToggle("Use HTML ParseMode", "No|Yes", 1);
+TG_Emoji    = ParamToggle("Use Emoji",          "No|Yes", 0);
+
+
+/* ---------- [B] Helpers ---------- */
+function TG_UrlEncode(s)
+{
+    s = StrReplace(s, "%","%25");
+    s = StrReplace(s, " ","%20");
+    s = StrReplace(s, "\n","%0A");
+    s = StrReplace(s, "\t","%09");
+    s = StrReplace(s, ":","%3A");
+    s = StrReplace(s, "/","%2F");
+    s = StrReplace(s, "&","%26");
+    s = StrReplace(s, "?","%3F");
+    s = StrReplace(s, "#","%23");
+    s = StrReplace(s, "+","%2B");
+    s = StrReplace(s, "\"","%22");
+    s = StrReplace(s, "'","%27");
+    return s;
+}
+
+// suffix static theo mã + chart
+function TG_Sfx()
+{
+    base = Name();                 // d?nh danh theo mã hi?n t?i
+    // n?u mu?n g?p thêm TF, có th? n?i thêm Interval(2)
+    return base;
+}
+
+// Key rate-limit (không dùng toán t? 3 ngôi)
+function TG_RLKey(side)
+{
+    isGlobal = StrMatch( TG_RateScope, "Global" ) != 0;
+    key = "";
+    if (isGlobal)
+        key = "TG_LAST_TS_GLOBAL_" + TG_Sfx();
+    else
+        key = "TG_LAST_TS_" + side + "_" + TG_Sfx();
+    return key;
+}
+
+// Cooldown (procedure)
+procedure TG_CanSendEval(side)
+{
+    key  = TG_RLKey(side);
+    last = Nz( StaticVarGet(key), 0 );
+    cur  = Now(4);
+
+    ok = (cur - last) >= TG_MinGapSecs;
+    if (TG_MinGapSecs <= 0) ok = 1;
+
+    if (ok) StaticVarSet(key, cur);
+    StaticVarSet("TG_OK_" + side + "_" + TG_Sfx(), IIf(ok,1,0));
+}
+
+// Edge rising intrabar
+function TG_Rising(sig, tag)
+{
+    cur  = LastValue(sig);
+    key  = "TG_LAST_BOOL_" + tag + "_" + TG_Sfx();
+    prev = Nz( StaticVarGet(key), 0 );
+    StaticVarSet(key, cur);
+    return cur AND NOT prev;
+}
+// Edge detector d?a theo BarIndex: phát hi?n "tín hi?u m?i" ?n d?nh hon
+function TG_OnNewSignal(sig, tag)
+{
+    curOn = LastValue(sig);
+    biSig = LastValue( ValueWhen(sig, BarIndex()) );
+
+    key   = "TG_LAST_BI_" + tag + "_" + TG_Sfx();
+    prev  = Nz( StaticVarGet(key), -1 );
+
+    StaticVarSet(key, biSig);
+
+    return curOn AND (biSig != prev);
+}
+// Build message t? template
+function TG_BuildMsg(side)
+{
+    sym  = Name();
+    px   = LastValue(C);
+    tfm  = Interval()/60000;
+    tstr = DateTimeToStr( LastValue(DateTime()) );
+
+    msg = TG_Template;
+    msg = StrReplace(msg, "{SIDE}",   side);
+    msg = StrReplace(msg, "{SYMBOL}", sym);
+    msg = StrReplace(msg, "{PRICE}",  WriteVal(px,1.2));
+    msg = StrReplace(msg, "{TF}",     WriteVal(tfm,1.0));
+    msg = StrReplace(msg, "{TIME}",   tstr);
+
+    if (TG_Prefix != "")
+        msg = TG_Prefix + "\n" + msg;
+
+    return msg;
+}
+
+// G?i Telegram (procedure)
+procedure TG_Send(msg)
+{
+    api  = TG_API;
+    chat = TG_CHAT;
+
+    if (api == "" OR chat == "")
+    {
+        // thi?u token/chat_id => b? qua
+    }
+    else
+    {
+        base = "https://api.telegram.org/bot" + api
+             + "/sendMessage?chat_id=" + chat
+             + "&disable_web_page_preview=1";
+        if (TG_UseHTML) base = base + "&parse_mode=HTML";
+
+        url = base + "&text=" + TG_UrlEncode(msg);
+        tg_handle = InternetOpenURL(url);
+        InternetClose(tg_handle);
+    }
+}
+
+/* ---------- [C] Refresh --------- */
+if (TG_RefreshSecs > 0) RequestTimedRefresh( TG_RefreshSecs );
+
+/* ---------- [D] Internal Test Signals (tùy ch?n) ---------- */
+if ( UseTestSignals )
+{
+    _macdBuy  = Cross( MACD(), Signal() );
+    _macdSell = Cross( Signal(), MACD() );
+
+    _macdBuy  = ExRem(_macdBuy,  _macdSell);
+    _macdSell = ExRem(_macdSell, _macdBuy );
+
+    Buy  = _macdBuy;
+    Sell = _macdSell;
+
+    Plot(C, "Close", colorDefault, styleCandle);
+}
+
+/* ---------- [E] TEST message theo c?nh báo g?n nh?t (dã l?c) ---------- */
+if (TG_TestBtn OR TG_TestEnable)
+{
+    // Bên nào g?n nh?t?
+    bbsN = LastValue( BarsSince(Buy) );
+    sbsN = LastValue( BarsSince(Sell) );
+    isLastBuy = bbsN < sbsN;
+
+    // L?y dúng giá tr? t?i BAR tín hi?u (fallback v? C n?u null)
+    entryT  = IIf(isLastBuy,
+                  ValueWhen(Buy , IIf(IsNull(BuyPrice ),  C, BuyPrice )),
+                  ValueWhen(Sell, IIf(IsNull(SellPrice), C, SellPrice)));
+
+    targetT = IIf(isLastBuy,
+                  ValueWhen(Buy , T_Long_Title ),
+                  ValueWhen(Sell, T_Short_Title));
+
+    slT     = IIf(isLastBuy,
+                  ValueWhen(Buy , tsl),
+                  ValueWhen(Sell, tsl));
+
+    // side label
+    sideLbl = "BUY";
+    if (TG_Emoji) sideLbl = "?? BUY";
+    if (!isLastBuy)
+    {
+        sideLbl = "SELL";
+        if (TG_Emoji) sideLbl = "?? SELL";
+    }
+
+    sym  = Name();
+    tfm  = Interval()/60000;
+    tstr = DateTimeToStr( LastValue(DateTime()) );
+
+    pref = "";
+    if (TG_Prefix != "") pref = TG_Prefix + "\n";
+
+    msgT = pref + "TEST MESSAGE\n"
+         + sideLbl + " " + sym
+         + "\nEntry: "  + WriteVal(entryT ,1.2)
+         + "\nTarget: " + WriteVal(targetT,1.2)
+         + "\nSL: "     + WriteVal(slT    ,1.2)
+         + "\nTF: "     + WriteVal(tfm    ,1.0) + "m"
+         + "\nTime: "   + tstr;
+
+    TG_Send(msgT);
+}
+
+/* ---------- [F] MAIN SEND (d?a trên Buy/Sell dã l?c c?a b?n) ---------- */
+if ( TG_Enable AND TG_InWindow() )
+{
+    // Trigger theo mode
+	isRising = StrMatch( TG_TriggerMode, "Rising" ) != 0;
+
+	if (isRising)
+	{
+    // Dùng detector theo BarIndex – không l?t BUY
+    canBuyTrig  = TG_OnNewSignal(Buy , "BUY");
+    canSellTrig = TG_OnNewSignal(Sell, "SELL");
+	}
+	else
+	{
+		canBuyTrig  = LastValue(Buy );
+		canSellTrig = LastValue(Sell);
+	}
+
+    // Cooldown
+		TG_CanSendEval("BUY");
+		TG_CanSendEval("SELL");
+    okBuy  = Nz( StaticVarGet("TG_OK_BUY_"  + TG_Sfx()), 0 );
+    okSell = Nz( StaticVarGet("TG_OK_SELL_" + TG_Sfx()), 0 );
+
+    // Giá/BarIndex dúng t?i bar phát tín hi?u (scalar)
+    entryB  = LastValue( ValueWhen( Buy , IIf(IsNull(BuyPrice ),  C, BuyPrice ) ) );
+    targetB = LastValue( ValueWhen( Buy , T_Long_Title  ) );
+    slB     = LastValue( ValueWhen( Buy , tsl           ) );
+    biBuy   = LastValue( ValueWhen( Buy , BarIndex()    ) );
+
+    entryS  = LastValue( ValueWhen( Sell, IIf(IsNull(SellPrice), C, SellPrice) ) );
+    targetS = LastValue( ValueWhen( Sell, T_Short_Title ) );
+    slS     = LastValue( ValueWhen( Sell, tsl          ) );
+    biSell  = LastValue( ValueWhen( Sell, BarIndex()   ) );
+
+    // Signature ch?ng trùng
+    buySig  = StrFormat("%g|%.2f|%.2f|%.2f", biBuy , entryB , targetB, slB );
+	sellSig = StrFormat("%g|%.2f|%.2f|%.2f", biSell, entryS , targetS, slS );
+
+	// ép v? chu?i r?ng n?u chua có (Null-safe)
+	prevBuySig  = StaticVarGetText("TG_LAST_SIG_BUY_"  + TG_Sfx()) + "";
+	prevSellSig = StaticVarGetText("TG_LAST_SIG_SELL_" + TG_Sfx()) + "";
+
+
+    // common info
+    sym  = Name();
+    tfm  = Interval()/60000;
+    tstr = DateTimeToStr( LastValue( DateTime() ) );
+
+    pref = "";
+    if (TG_Prefix != "") pref = TG_Prefix + "\n";
+
+    sideBuyLbl  = "BUY";
+	sideSellLbl = "SELL";
+
+
+    // SEND BUY
+    if ( canBuyTrig AND okBuy AND (buySig != prevBuySig) )
+    {
+        msgB = pref + sideBuyLbl + " " + sym
+             + "\nEntry: "  + WriteVal(entryB ,1.2)
+             + "\nTarget: " + WriteVal(targetB,1.2)
+             + "\nSL: "     + WriteVal(slB    ,1.2)
+             + "\nTF: "     + WriteVal(tfm    ,1.0) + "m"
+             + "\nTime: "   + tstr;
+        TG_Send(msgB);
+        StaticVarSetText("TG_LAST_SIG_BUY_"  + TG_Sfx(), buySig);
+    }
+
+    // SEND SELL
+    if ( canSellTrig AND okSell AND (sellSig != prevSellSig) )
+    {
+        msgS = pref + sideSellLbl + " " + sym
+             + "\nEntry: "  + WriteVal(entryS ,1.2)
+             + "\nTarget: " + WriteVal(targetS,1.2)
+             + "\nSL: "     + WriteVal(slS    ,1.2)
+             + "\nTF: "     + WriteVal(tfm    ,1.0) + "m"
+             + "\nTime: "   + tstr;
+        TG_Send(msgS);
+        StaticVarSetText("TG_LAST_SIG_SELL_" + TG_Sfx(), sellSig);
+    }
+}
+/* ================== END CJVN Telegram Drop-In v2.3 (SAFE AFL) ================== */
+_SECTION_END();
