@@ -3,10 +3,10 @@ SetBarsRequired(10000, 0);
 SetOption("DisableRuinStop", True);
 SetPositionSize(10, spsPercentOfEquity);
 
-per = Nz(Param("EMA Period", 20, 2, 200, 1), 20);
-ind_ema = EMA(Close, per);
+strat_ema_per = Nz(Param("EMA Period", 20, 2, 200, 1), 20);
+strat_ema     = EMA(Close, strat_ema_per);
 
-Buy  = Cross(Close, ind_ema);
-Sell = Cross(ind_ema, Close);
+Buy  = Cross(Close, strat_ema);
+Sell = Cross(strat_ema, Close);
 
 PositionScore = ROC(Close, 5);
