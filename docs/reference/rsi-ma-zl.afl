@@ -1,0 +1,467 @@
+// ===================== ORIGINAL: MODIFIED RSI =====================
+_SECTION_BEGIN("MODIFIED RSI");
+SetChartBkColor( ParamColor("Panel color ", colorBlack) );
+RP = Param("RSI", 14, 2, 100, 1);
+UL = Param("Upper Limit", 70, 0, 100, 1);
+LL = Param("Lower Limit", 30, 0, 100, 1);
+PlotGrid( UL, colorBlue );
+PlotGrid( LL, colorBlue );
+
+R = RSIa( C, RP );
+Plot( R, "MODIFIED RSI", colorLime, styleThick );
+
+Overbought = 70;
+Oversold   = 30;
+Plot( Overbought, "Overbought Zone", colorBlue );
+Plot( Oversold,   "Oversold Zone",   colorGreen );
+
+// (gi? nguyên tín hi?u mui tên g?c c?a b?n cho indicator này)
+Buy  = Cross( R, Oversold )  AND R > Oversold;
+Sell = Cross( Overbought, R ) AND R < Overbought;
+PlotShapes( IIf(Sell, shapeDownArrow, shapeNone), colorRed );
+PlotShapes( IIf(Buy,  shapeUpArrow,   shapeNone), colorGreen );
+_SECTION_END();
+
+// ===================== Zero-lag RSI tính theo code g?c =====================
+MaxGraph = 10;
+Period1  = Param("Period 1", 10, 5, 50, 1);
+Period2  = Param("Period 2", 10, 5, 50, 1);
+
+EMA1       = EMA( R, Period1 );
+EMA2       = EMA( EMA1, Period2 );
+Difference = EMA1 - EMA2;
+ZeroLagEMA = EMA1 + Difference;            // <== RSI Zero-Lag (KHÔNG abs)
+PR         = abs( ZeroLagEMA );            // ph?n hi?n th? cu c?a b?n
+
+Graph0      = PR;
+MoveAvg     = MA( PR, 5 );
+Graph0Style = 4;
+
+upbar   = PR >= MoveAvg AND PR >= Ref(PR, -1);
+downbar = (PR < MoveAvg) OR PR >= MoveAvg AND PR < Ref(PR, -1);
+barcolor = IIf( downbar, colorRed, IIf( upbar, colorBrightGreen, 7) );
+Graph0BarColor = ValueWhen( barcolor != 0, barcolor );
+
+Graph2 = 30;
+Graph3 = 70;
+Graph2Style = Graph3Style = Graph4Style = 1;
+Graph4Color = 2;
+Graph2Color = 5;
+Graph3Color = 4;
+
+// (MA3 c?a b?n – gi? nguyên)
+_SECTION_BEGIN("MA3");
+P       = ParamField("Price field", -1);
+Periods = Param("Periods", 15, 2, 300, 1, 10);
+Plot( MA(P, Periods), _DEFAULT_NAME(), ParamColor("Color", colorCycle), ParamStyle("Style") );
+_SECTION_END();
+
+
+// ==========================================================================
+// ======================  RSI_ZL ADD-ON (CLEAN)  ===========================
+// - So sánh RSI_ZL v?i MA/EMA c?a chính nó
+// - Buffer: Fixed ho?c k*StDev(diff)
+// - Mui tên v? trên CHART GIÁ (Low/High) d? ?n d?nh trên AB 5.40.x
+// - Title g?n (không StrFormat, không IIf tr? v? string)
+// ==========================================================================
+
+/***** RSI_ZL RULES ONLY (no Explore) *****/
+_SECTION_BEGIN("RSI_ZL_RULES_ONLY");
+SetBarsRequired(10000, 0);
+
+// ===== Tham s? chính
+RP        = Param("RSI Len", 14, 2, 100, 1);
+p1        = Param("ZeroLag P1", 10, 2, 100, 1);
+p2        = Param("ZeroLag P2", 10, 2, 100, 1);
+useEMA    = ParamToggle("RSI MA Type", "MA|EMA", 1);
+maLenRSI  = Param("RSI_MA Len", 16, 2, 300, 1);
+
+// Buffer
+bufMode   = ParamList("Buffer Mode", "Fixed|StDev*k", 1);
+bufFix    = Param("Buffer Fixed", 0.80, 0, 10, 0.05);
+bufK      = Param("k (StDev*k)", 1.20, 0, 5, 0.05);
+bufLen    = Param("Buffer StDev Len", 20, 2, 400, 1);
+
+// Ngu?ng & pattern
+hiThr_S   = Param("Short: RSI High Thr", 70, 50, 95, 1);
+loThr_L   = Param("Long:  RSI Low  Thr", 30,  5, 50, 1);
+usePeaksS = ParamToggle("Short: Use 2 peaks", "Off|On", 1);
+useTrghL  = ParamToggle("Long:  Use 2 troughs", "Off|On", 1);
+lookSw    = Param("Pattern lookback bars", 30, 5, 300, 1);
+
+// S/R 3 phút
+srModeFast    = ParamToggle("SR 3m mode", "Exact(Peak/Trough)|Fast(LLV/HHV)", 1);
+LB3           = Param("SR 3m lookback (bars)", 300, 50, 5000, 50);
+minDistSup_S  = Param("Short: Min Dist to Support(3m)", 2500, 0, 100000, 10);
+minDistRes_L  = Param("Long:  Min Dist to Resistance(3m)", 2500, 0, 100000, 10);
+
+
+// ===== RSI, ZeroLag RSI, MA/EMA trên RSI_ZL
+R      = RSIa(C, RP);
+ema1   = EMA(R, p1);
+ema2   = EMA(ema1, p2);
+rsi_zl = ema1 + (ema1 - ema2);
+rsi_ma = IIf(useEMA, EMA(rsi_zl, maLenRSI), MA(rsi_zl, maLenRSI));
+
+// Buffer & tín hi?u
+diff = rsi_zl - rsi_ma;
+sd   = Nz( StDev(diff, Max(2, bufLen)) );
+buf  = IIf( StrFind(""+bufMode, "Fixed") >= 0, bufFix, bufK*sd );
+sigLong  = Cross( diff,  buf );
+sigShort = Cross( -buf,  diff );
+
+aboveMA = diff >  buf;
+belowMA = diff < -buf;
+bothHigh = (rsi_zl > hiThr_S) AND (rsi_ma > hiThr_S);
+bothLow  = (rsi_zl < loThr_L) AND (rsi_ma < loThr_L);
+
+// Pattern 2 d?nh/2 dáy
+isPeak     = PeakBars(rsi_zl,2,2)==0;
+isTrough   = TroughBars(rsi_zl,2,2)==0;
+lastPeak   = ValueWhen(isPeak,   rsi_zl, 1);
+prevPeak   = ValueWhen(isPeak,   rsi_zl, 2);
+lastTrough = ValueWhen(isTrough, rsi_zl, 1);
+prevTrough = ValueWhen(isTrough, rsi_zl, 2);
+twoLowerHighs = lastPeak   < prevPeak   AND BarsSince(isPeak)   <= lookSw;
+twoHigherLows = lastTrough > prevTrough AND BarsSince(isTrough) <= lookSw;
+
+// S/R 3m (an toàn v?i m?i phiên b?n)
+tf3 = 3 * in1Minute;
+TimeFrameSet(tf3);
+    if (srModeFast)
+    {
+        _sup3m = Ref( LLV(Low,  LB3), 0 );
+        _res3m = Ref( HHV(High, LB3), 0 );
+    }
+    else
+    {
+        _sup3m = ValueWhen( TroughBars(Close,2,2)==0, Low,  1 );
+        _res3m = ValueWhen(   PeakBars(Close,2,2)==0, High, 1 );
+    }
+TimeFrameRestore();
+sup3m     = TimeFrameExpand(_sup3m, tf3, expandFirst);
+res3m     = TimeFrameExpand(_res3m, tf3, expandFirst);
+distToSup = C - sup3m;
+distToRes = res3m - C;
+
+// ===== RULES riêng
+Rule_Short = ( bothHigh OR sigShort OR belowMA )
+             AND ( Nz(distToSup) >= minDistSup_S )
+             AND ( !usePeaksS OR twoLowerHighs );
+
+Rule_Long  = ( bothLow  OR sigLong  OR aboveMA )
+             AND ( Nz(distToRes) >= minDistRes_L )
+             AND ( !useTrghL OR twoHigherLows );
+// Option show up down
+showRuleMarkers = ParamToggle("Show RULE markers", "Off|On", 1);
+if ( showRuleMarkers )
+{
+    PlotShapes( IIf(Rule_Long ,  shapeUpArrow  , shapeNone), colorLime  , 0, Low , -12 );
+    PlotShapes( IIf(Rule_Short,  shapeDownArrow, shapeNone), colorOrange, 0, High, -12 );
+}
+//
+
+
+// Buy sell by rule RSI Option
+useRulesAsEntry = ParamToggle("Use rules as entries", "Off|On", 1);
+if (useRulesAsEntry) { Buy=Rule_Long; Sell=0; Short=Rule_Short; Cover=0; }
+//Buy sell by RSI optin end
+
+
+useRulesAsEntry = ParamToggle("Use rules as entries", "Off|On", 0);
+if (useRulesAsEntry)
+{
+    Buy   = Rule_Long;  Sell  = 0;
+    Short = Rule_Short; Cover = 0;
+}
+
+// ===== Marker tín hi?u trên giá
+PlotShapes( shapeSmallCircle * Rule_Long,  colorLime,   0, Low,  -6 );
+PlotShapes( shapeSmallCircle * Rule_Short, colorOrange, 0, High, -6 );
+
+// hi?n th? mui tên cross (n?u mu?n)
+showCross = ParamToggle("Show raw cross arrows", "Off|On", 1);
+
+if (showCross)
+{
+    PlotShapes( shapeUpArrow   * sigLong,  colorGreen, 0, Low,  -12 );
+    PlotShapes( shapeDownArrow * sigShort, colorRed,   0, High, -12 );
+}
+
+// (tu? ch?n) dùng RULE làm entry cho backtest
+
+// --- (d?t ngay TRU?C khi v? PlotShapes) ---
+// Kh?i t?o m?c d?nh d? không bao gi? "uninitialised"
+Buy   = 0;
+Sell  = 0;
+Short = 0;
+Cover = 0;
+
+// B?t t?t dùng RULE làm entry backtest / v? mui tên
+useRulesAsEntry = ParamToggle("Use rules as entries", "Off|On", 1);
+if (useRulesAsEntry)
+{
+    Buy   = Rule_Long;
+    Short = Rule_Short;
+    // Sell & Cover gi? 0, b?n có th? d?t thêm logic thoát n?u mu?n
+}
+
+// ========== BACKTEST WIRING: entry/exit + stops ==========
+SetTradeDelays(0, 0, 0, 0);
+SetOption("AllowSameBarExit", True);
+SetOption("ReverseSignalForcesExit", True);
+
+Buy   = Sell = Short = Cover = 0;
+
+useRulesAsEntry = ParamToggle("Use rules as entries", "Off|On", 1);
+if (useRulesAsEntry)
+{
+    // Entry theo rule
+    Buy   = Rule_Long;
+    Short = Rule_Short;
+
+    // Thoát khi có tín hi?u NGU?C
+    Sell  = Rule_Short;   // exit long khi xu?t hi?n rule short
+    Cover = Rule_Long;    // exit short khi xu?t hi?n rule long
+
+    // Kh? trùng tín hi?u (ch?ng l?p)
+    Buy   = ExRem(Buy,  Sell);
+    Sell  = ExRem(Sell, Buy);
+    Short = ExRem(Short, Cover);
+    Cover = ExRem(Cover, Short);
+
+    // Stops (áp d?ng cho c? long/short)
+    // 0.8% trailing + 1.5% take profit
+    ApplyStop( stopTypeTrailing, stopModePercent, 0.8, True );
+    ApplyStop( stopTypeProfit,   stopModePercent, 1.5, True );
+}
+
+
+// V? mui tên theo chu?n c?a b?n
+PlotShapes( IIf(Buy  , shapeUpArrow     , shapeNone), colorWhite , 0, Low  , -15 );
+PlotShapes( IIf(Sell , shapeDownArrow   , shapeNone), colorYellow, 0, High , -15 );
+PlotShapes( IIf(Cover, shapeHollowCircle, shapeNone), colorWhite , 0, Close,   0 );
+PlotShapes( IIf(Short, shapeHollowCircle, shapeNone), colorYellow, 0, Close,   0 );
+
+
+// ===== Title
+iv   = Interval();           // s? giây c?a khung hi?n t?i
+mins = iv/60;
+
+tfLabel =
+   WriteIf( iv < 3600,                     // < 1 gi?  -> d?ng Xm
+            WriteVal( mins, 1.0 ) + "m",
+   WriteIf( iv < 86400,                    // < 1 ngày -> d?ng Xh
+            WriteVal( iv/3600, 1.0 ) + "h",
+   WriteIf( iv < 604800,                   // < 7 ngày -> Daily
+            "Daily",
+   WriteIf( iv < 2678400,                  // < ~31 ngày -> Weekly
+            "Weekly",
+            "Monthly" ))));
+
+maTypeTxt = WriteIf(useEMA, "EMA", "MA");    // 1 -> EMA, 0 -> MA
+bufModeTxt = "" + bufMode;                   // ép chu?i an toàn
+
+Title =
+   "v1_RSI_MA_Only_chatGPT : "
+ + "TF: " + tfLabel
+ + "  RSI " + WriteVal( RP, 1.0 )
+ + "  ZL(" + WriteVal(p1,1.0) + "," + WriteVal(p2,1.0) + ")"
+ + "  MAlen=" + WriteVal( maLenRSI, 1.0 ) + " " + WriteIf( useEMA, "EMA", "MA" );
+
+_SECTION_END();
+
+/***** V1_RSI_MA + RULES + EXPLORE (AmiBroker 5.40) *****/
+SetBarsRequired( 10000, 0 );
+
+//===================== THAM S? CHUNG =====================
+rsiLen     = Param("RSI Len", 14, 2, 100, 1);
+zlP1       = Param("ZeroLag P1", 10, 2, 100, 1);
+zlP2       = Param("ZeroLag P2", 10, 2, 100, 1);
+useEMA     = ParamToggle("RSI MA Type", "MA|EMA", 1);
+maLenRSI   = Param("RSI_MA Len", 16, 2, 300, 1);
+
+// Buffer
+bufMode    = ParamList("Buffer Mode", "Fixed|StDev*k", 1);
+bufFix     = Param("Buffer Fixed", 0.80, 0, 10, 0.05);
+bufK       = Param("k (StDev*k)", 1.20, 0, 5, 0.05);
+bufLen     = Param("Buffer StDev Len", 20, 2, 400, 1);
+
+// Ngu?ng & m?u hình
+hiThr_S    = Param("Short: RSI High Thr", 70, 50, 95, 1);
+loThr_L    = Param("Long:  RSI Low  Thr", 30,  5, 50, 1);
+usePeaksS  = ParamToggle("Short: Use 2 peaks", "Off|On", 1);
+useTrghL   = ParamToggle("Long:  Use 2 troughs", "Off|On", 1);
+lookSw     = Param("Pattern lookback bars", 30, 5, 300, 1);
+
+// SR khung 3 phút (?n d?nh cho 5.40)
+srModeFast   = ParamToggle("SR 3m mode", "Exact(Peak/Trough)|Fast(LLV/HHV)", 1);
+LB3          = Param("SR 3m lookback (bars)", 300, 50, 5000, 50);
+minDistSup_S = Param("Short: Min Dist to Support(3m)", 2500, 0, 100000, 10);
+minDistRes_L = Param("Long:  Min Dist to Resistance(3m)", 2500, 0, 100000, 10);
+
+//===================== TÍNH RSI_ZL & MA/EMA =====================
+R       = RSIa( C, rsiLen );
+ema1    = EMA( R, zlP1 );
+ema2    = EMA( ema1, zlP2 );
+rsi_zl  = ema1 + (ema1 - ema2);                         // Zero-Lag RSI
+rsi_ma  = IIf( useEMA, EMA(rsi_zl, maLenRSI), MA(rsi_zl, maLenRSI) );
+
+diff    = rsi_zl - rsi_ma;
+sd      = Nz( StDev( diff, Max(2, bufLen) ) );
+buf     = IIf( StrFind( ""+bufMode, "Fixed" ) >= 0, bufFix, bufK * sd );
+
+sigLong  = Cross( diff,  buf );
+sigShort = Cross( -buf,  diff );
+aboveMA  = diff >  buf;
+belowMA  = diff < -buf;
+
+bothHigh = (rsi_zl > hiThr_S) AND (rsi_ma > hiThr_S);
+bothLow  = (rsi_zl < loThr_L) AND (rsi_ma < loThr_L);
+
+//===================== 2 Ð?NH / 2 ÐÁY =====================
+isPeak     = PeakBars  ( rsi_zl, 2, 2 ) == 0;
+isTrough   = TroughBars( rsi_zl, 2, 2 ) == 0;
+lastPeak   = ValueWhen( isPeak,   rsi_zl, 1 );
+prevPeak   = ValueWhen( isPeak,   rsi_zl, 2 );
+lastTrough = ValueWhen( isTrough, rsi_zl, 1 );
+prevTrough = ValueWhen( isTrough, rsi_zl, 2 );
+twoLowerHighs = lastPeak   < prevPeak   AND BarsSince(isPeak)   <= lookSw;
+twoHigherLows = lastTrough > prevTrough AND BarsSince(isTrough) <= lookSw;
+
+//===================== S/R 3 PHÚT =====================
+tf3 = 3 * in1Minute;
+TimeFrameSet( tf3 );
+    if ( srModeFast )
+    {
+        _sup3m = LLV( Low,  LB3 );
+        _res3m = HHV( High, LB3 );
+    }
+    else
+    {
+        _sup3m = ValueWhen( TroughBars(Close,2,2)==0, Low,  1 );
+        _res3m = ValueWhen(   PeakBars(Close,2,2)==0, High, 1 );
+    }
+TimeFrameRestore();
+
+sup3m     = TimeFrameExpand( _sup3m, tf3, expandFirst );
+res3m     = TimeFrameExpand( _res3m, tf3, expandFirst );
+distToSup = C - sup3m;
+distToRes = res3m - C;
+
+//===================== RULES =====================
+Rule_Short =
+    ( bothHigh OR sigShort OR belowMA )
+ AND ( Nz(distToSup) >= minDistSup_S )
+ AND ( !usePeaksS OR twoLowerHighs );
+
+Rule_Long  =
+    ( bothLow  OR sigLong  OR aboveMA )
+ AND ( Nz(distToRes) >= minDistRes_L )
+ AND ( !useTrghL OR twoHigherLows );
+
+//===================== MARKERS TRÊN GIÁ =====================
+showRuleMarkers = ParamToggle("Show RULE markers", "Off|On", 1);
+if ( showRuleMarkers )
+{
+    PlotShapes( IIf(Rule_Long ,  shapeUpArrow  , shapeNone), colorLime  , 0, Low ,  -12 );
+    PlotShapes( IIf(Rule_Short,  shapeDownArrow, shapeNone), colorOrange, 0, High, -12 );
+}
+
+//===================== BACKTEST WIRING =====================
+SetTradeDelays(0,0,0,0);
+SetOption("AllowSameBarExit", True);
+SetOption("ReverseSignalForcesExit", True);
+
+Buy   = Sell = Short = Cover = 0;
+
+useRulesAsEntry = ParamToggle("Use rules as entries", "Off|On", 1);
+if ( useRulesAsEntry )
+{
+    // vào l?nh theo rule
+    Buy   = Rule_Long;
+    Short = Rule_Short;
+
+    // thoát khi có tín hi?u NGU?C
+    Sell  = Rule_Short;     // exit long
+    Cover = Rule_Long;      // exit short
+
+    // kh? trùng l?p
+    Buy   = ExRem( Buy,  Sell  );
+    Sell  = ExRem( Sell, Buy   );
+    Short = ExRem( Short, Cover );
+    Cover = ExRem( Cover, Short );
+
+    // stops (trailing + take profit)
+    ApplyStop( stopTypeTrailing, stopModePercent, 0.8, True );
+    ApplyStop( stopTypeProfit,   stopModePercent, 1.5, True );
+}
+
+// mui tên chu?n AmiBroker
+PlotShapes( IIf(Buy  , shapeUpArrow     , shapeNone), colorWhite , 0, Low  , -15 );
+PlotShapes( IIf(Sell , shapeDownArrow   , shapeNone), colorYellow, 0, High , -15 );
+PlotShapes( IIf(Cover, shapeHollowCircle, shapeNone), colorWhite , 0, Close,   0 );
+PlotShapes( IIf(Short, shapeHollowCircle, shapeNone), colorYellow, 0, Close,   0 );
+
+//===================== EXPLORE =====================
+showHits = ParamToggle("Explore: show only rule hits", "Off|On", 1);
+// Outcome sau lookahead (AFL 5.40+)
+lookFwd   = Param("Explore: lookahead bars", 10, 1, 200, 1);
+fwdClose  = Ref( C, lookFwd );                      // C vi?t HOA
+fwdRetPct = 100 * Nz( (fwdClose - C) / C );         // Ð? ngo?c và d?u ;
+edgePct   = IIf(Rule_Long, fwdRetPct, IIf(Rule_Short, -fwdRetPct, Null));
+
+
+Filter = IIf( showHits, Rule_Long OR Rule_Short, 1 );
+
+SetOption("NoDefaultColumns", True);
+AddTextColumn( Name(), "Symbol" );
+AddColumn( DateTime(), "Date/Time", formatDateTime );
+
+// nhãn TF don gi?n (không dùng StrFormat)
+iv   = Interval();
+mins = iv/60;
+tfLabel =
+   WriteIf( iv < 3600,   WriteVal(mins,1.0)+"m",
+   WriteIf( iv < 86400,  WriteVal(iv/3600,1.0)+"h",
+   WriteIf( iv < 604800, "Daily",
+   WriteIf( iv < 2678400,"Weekly","Monthly"))));
+AddTextColumn( tfLabel, "TF" );
+
+AddTextColumn( WriteIf(Rule_Long,"LONG", WriteIf(Rule_Short,"SHORT","")), "Dir" );
+
+AddColumn( C,              "Close",    1.2 );
+AddColumn( Nz(sup3m),      "Sup(3m)",  1.2 );
+AddColumn( Nz(res3m),      "Res(3m)",  1.2 );
+AddColumn( Nz(distToSup),  "DistSup",  1.1 );
+AddColumn( Nz(distToRes),  "DistRes",  1.1 );
+
+AddColumn( rsi_zl, "RSI_ZL", 1.2 );
+AddColumn( rsi_ma, "RSI_MA", 1.2 );
+AddColumn( diff,   "diff",   1.2 );
+AddColumn( buf,    "buf",    1.2 );
+
+AddColumn( IIf(aboveMA ,1,0), "aboveMA", 1.0 );
+AddColumn( IIf(belowMA ,1,0), "belowMA", 1.0 );
+AddColumn( IIf(bothHigh,1,0), "bothHigh",1.0 );
+AddColumn( IIf(bothLow ,1,0), "bothLow", 1.0 );
+AddColumn( IIf(sigLong ,1,0), "sigLong", 1.0, colorLime   );
+AddColumn( IIf(sigShort,1,0), "sigShort",1.0, colorOrange );
+
+AddColumn( rsiLen , "RSIlen", 1.0 );
+AddColumn( zlP1   , "ZL_P1",  1.0 );
+AddColumn( zlP2   , "ZL_P2",  1.0 );
+AddColumn( maLenRSI, "RSI_MA",1.0 );
+AddTextColumn( ""+bufMode, "BufMode" );
+AddColumn( bufLen , "BufLen", 1.0 );
+AddColumn( bufFix , "BufFix", 1.2 );
+AddColumn( bufK   , "k",      1.2 );
+
+AddColumn( fwdRetPct, "fwdRetPct_raw", 1.2 );
+AddColumn( edgePct  , "EdgePct_byDir", 1.2 );
+AddColumn( lookFwd  , "Lookahead_bars", 1.0 );
+
+//===================== TITLE NG?N =====================
+Title = "V1_RSI_MA (AB 5.40)  |  RSI="+WriteVal(rsiLen,1.0)
+      + "  ZL("+WriteVal(zlP1,1.0)+","+WriteVal(zlP2,1.0)+")"
+      + "  MAlen="+WriteVal(maLenRSI,1.0)+" "+WriteIf(useEMA,"EMA","MA");
