@@ -1,0 +1,15 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Outputs
+out/
+reports/
+*.png
+*.jpg
+*.bmp
+*.html
+*.csv
+*.xlsx

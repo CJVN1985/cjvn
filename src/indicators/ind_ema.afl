@@ -1,0 +1,7 @@
+// Example EMA indicator (placeholder)
+SetBarsRequired(10000, 0);
+
+per = Nz(Param("EMA Period", 20, 2, 200, 1), 20);
+ind_ema = EMA(Close, per);
+
+Plot(ind_ema, "ind_ema("+per+")", colorDefault, styleLine);
