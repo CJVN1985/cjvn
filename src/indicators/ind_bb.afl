@@ -1,0 +1,24 @@
+/* CJVN indicator: Bollinger Bands */
+SetBarsRequired(10000, 0);
+#include "..\utils\util_ma.afl"
+
+ind_bb_len    = Param("BB Period", 20, 2, 400, 1);
+ind_bb_mult   = Param("StdDev Mult", 2.0, 0.5, 5, 0.1);
+ind_bb_maType = ParamList("MA Type", "SMA|EMA|WMA|DEMA", 0);
+ind_bb_plot   = ParamToggle("Plot", "Off|On", 1);
+
+ind_bb_basis = cjvn_ma(Close, ind_bb_len, ind_bb_maType);
+ind_bb_dev   = StDev(Close, ind_bb_len);
+ind_bb_upper = ind_bb_basis + ind_bb_mult * ind_bb_dev;
+ind_bb_lower = ind_bb_basis - ind_bb_mult * ind_bb_dev;
+
+// (tuỳ chọn) tín hiệu tham khảo
+ind_bb_buy   = Cross(Close, ind_bb_lower);
+ind_bb_sell  = Cross(ind_bb_upper, Close);
+
+if (ind_bb_plot)
+{
+    Plot(ind_bb_basis, "BB basis", colorGrey50, styleLine);
+    Plot(ind_bb_upper, "BB upper", colorBlue, styleLine);
+    Plot(ind_bb_lower, "BB lower", colorBlue, styleLine);
+}

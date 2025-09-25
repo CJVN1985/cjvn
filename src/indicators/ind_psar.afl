@@ -1,0 +1,20 @@
+/* CJVN indicator: Parabolic SAR (Stop and Reverse) */
+SetBarsRequired(10000, 0);
+
+ind_psar_af   = Param("SAR Accel (AF)", 0.02, 0.001, 0.5, 0.001);
+ind_psar_max  = Param("SAR Max AF",     0.20, 0.02,  1.0, 0.01);
+ind_psar_plot = ParamToggle("Plot", "Off|On", 1);
+
+ind_psar_val = SAR(ind_psar_af, ind_psar_max);
+
+// 1 = long regime (giá trên SAR), -1 = short regime
+ind_psar_dir  = IIf(Close > ind_psar_val, 1, -1);
+
+// tín hiệu đảo chiều chuẩn
+ind_psar_buy  = Cross(Close, ind_psar_val);
+ind_psar_sell = Cross(ind_psar_val, Close);
+
+if (ind_psar_plot)
+{
+    Plot(ind_psar_val, "PSAR", colorRed, styleDots | styleNoLine);
+}

@@ -1,0 +1,8 @@
+/* CJVN util: chọn loại MA theo chuỗi "SMA|EMA|WMA|DEMA" */
+function cjvn_ma(src, len, maType)
+{
+    if (maType == "EMA")  return EMA(src, len);
+    if (maType == "WMA")  return WMA(src, len);
+    if (maType == "DEMA") return DEMA(src, len);
+    return MA(src, len); // mặc định: SMA
+}

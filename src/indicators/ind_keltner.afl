@@ -1,0 +1,24 @@
+/* CJVN indicator: Keltner Channel (EMA ± ATR*k) */
+SetBarsRequired(10000, 0);
+
+ind_kc_lenEMA  = Param("EMA Period", 20, 2, 400, 1);
+ind_kc_lenATR  = Param("ATR Period", 10, 2, 200, 1);
+ind_kc_mult    = Param("ATR Mult", 2.0, 0.5, 5, 0.1);
+ind_kc_plot    = ParamToggle("Plot", "Off|On", 1);
+
+ind_kc_basis = EMA(Close, ind_kc_lenEMA);
+ind_kc_band  = ind_kc_mult * ATR(ind_kc_lenATR);
+
+ind_kc_upper = ind_kc_basis + ind_kc_band;
+ind_kc_lower = ind_kc_basis - ind_kc_band;
+
+// (tuỳ chọn) tín hiệu tham khảo
+ind_kc_buy   = Cross(Close, ind_kc_lower);
+ind_kc_sell  = Cross(ind_kc_upper, Close);
+
+if (ind_kc_plot)
+{
+    Plot(ind_kc_basis, "KC basis", colorGrey50, styleLine);
+    Plot(ind_kc_upper, "KC upper", colorOrange, styleLine);
+    Plot(ind_kc_lower, "KC lower", colorOrange, styleLine);
+}
