@@ -23,6 +23,90 @@ In-scope:
 
 2. Chuẩn hóa 
 	- các biến, 
+    
+=======
+A. Chuẩn dữ liệu bắt buộc tại thời điểm hoàn tất mô hình
+
+Nhận diện:
+
+harm_id (1=Gartley, 2=Bat, 3=Butterfly, 4=Crab, …)
+
+harm_dir (1 = Bullish PRZ, -1 = Bearish PRZ)
+
+harm_bar (DateTime bar hoàn tất)
+
+PRZ:
+
+harm_prz_low, harm_prz_high, harm_prz_mid = (low+high)/2
+
+harm_prz_width = high-low, harm_prz_width_pct = (width / Close) * 100
+
+Tỉ lệ (ratios) khi hoàn tất (theo XA, AB, BC, CD, AD; các giá trị đã đo được):
+
+harm_ab_xa (|AB|/|XA|)
+
+harm_bc_ab (|BC|/|AB|)
+
+harm_cd_bc (|CD|/|BC|) // projection/extension
+
+harm_ad_xa (|AD|/|XA|) // completion ratio
+
+harm_confluence_cnt = số tỉ lệ đạt trong tolerance đối với mẫu hợp lệ
+
+Các độ lệch tới mốc “chuẩn” (ví dụ Gartley: AD≈0.786, AB≈0.618, BC≈0.382/0.886, CD≈1.27…):
+harm_dev_ab, harm_dev_bc, harm_dev_cd, harm_dev_ad (giá trị tuyệt đối)
+
+Ngữ cảnh (tại bar hoàn tất):
+
+rsi, rsi_ma, psar_dir, bb_squeeze (BB inside KC), trend_up (EMA21>EMA55)
+
+Khoảng cách % tới BB/KC/Fibo 38/50/61: dist_to_bb_u/l, near_fibo (±tol%)
+
+B. Entry/SL/TP chuẩn hoá (để đánh giá win-rate đồng nhất)
+
+entry_price = harm_prz_mid (mặc định) hoặc Close của bar xác nhận (param).
+
+Bullish: stop = harm_prz_low, Bearish: stop = harm_prz_high.
+
+risk_R = Abs(entry - stop).
+
+TP chuẩn:
+
+tp1 = entry + sign* 1.0 * risk_R
+
+tp2 = entry + sign* 2.0 * risk_R
+
+tpFib (tuỳ chọn): về lại Fibo 38/61 của AD hoặc/ và đường KC basis.
+
+Ghi which_tp nếu bạn chọn 1 TP chuẩn (ví dụ TP1 = 1R).
+
+C. Định nghĩa kết quả để thống kê
+
+Thời gian đánh giá: N_eval (mặc định 20 bar, param).
+
+Tính MFE_R (max favorable excursion / R) và MAE_R trong 20 bar sau bar hoàn tất.
+
+Win@1R: đạt ≥ 1R trước khi chạm SL? (bullish dùng HHV; bearish dùng LLV).
+
+Win@2R tương tự.
+
+Nhãn kết quả: outcome ∈ {HIT_TP, HIT_SL, NONE}.
+
+Lưu time_to_tp/time_to_sl (số bar).
+
+D. KPI mục tiêu & phân tích
+
+Win-rate theo tỉ lệ: nhóm (bin) theo harm_ad_xa (ví dụ 0.786±tol, 0.886±tol, 1.27±tol, 1.618±tol…), chéo harm_bc_ab & harm_cd_bc.
+
+Win-rate theo confluence: ≥2/3 tỉ lệ “đúng” có win-rate cao hơn?
+
+Ảnh hưởng ngữ cảnh: psar_dir đồng hướng, bb_squeeze, trend_up…
+
+Đầu ra phân tích: bảng pivot “pattern × bins(tỉ lệ) × dir → Win@1R/2R, MFE_R mean, time_to_tp median”.
+
+Dùng kết quả để ưu tiên tự động: khi mới có signal, chọn buy/sell theo bucket có win-rate cao nhất (và đủ điều kiện ngữ cảnh).
+
+
 	- quy tắc vị trí thứ tự các funcion dựa trên chức năng và phối hợp dựa trên
 		- function cung cấp dữ liệu đầu ra đứng trước
 		- function nào lấy dữ liệu để sử dụng đứng sau
