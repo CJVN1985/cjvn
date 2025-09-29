@@ -23,6 +23,8 @@ In-scope:
 
 2. Chuẩn hóa 
 	- các biến, 
+    
+=======
 A. Chuẩn dữ liệu bắt buộc tại thời điểm hoàn tất mô hình
 
 Nhận diện:
@@ -103,6 +105,7 @@ Win-rate theo confluence: ≥2/3 tỉ lệ “đúng” có win-rate cao hơn?
 Đầu ra phân tích: bảng pivot “pattern × bins(tỉ lệ) × dir → Win@1R/2R, MFE_R mean, time_to_tp median”.
 
 Dùng kết quả để ưu tiên tự động: khi mới có signal, chọn buy/sell theo bucket có win-rate cao nhất (và đủ điều kiện ngữ cảnh).
+
 
 	- quy tắc vị trí thứ tự các funcion dựa trên chức năng và phối hợp dựa trên
 		- function cung cấp dữ liệu đầu ra đứng trước
