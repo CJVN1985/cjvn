@@ -1,0 +1,18 @@
+/* CJVN – HARMONIC EVAL (DEV)
+   Dùng MOCK API trong devtest để thu dữ liệu thử nghiệm.
+*/
+SetBarsRequired(10000, 0);
+SetOption("NoDefaultColumns", True);
+
+// include mock thay vì core
+#include "..\..\devtest\ind_harmonic_core_mock.afl"
+
+// các indicator ngữ cảnh vẫn dùng bình thường
+#include "..\indicators\ind_bb.afl"
+#include "..\indicators\ind_keltner.afl"
+#include "..\indicators\ind_psar.afl"
+#include "..\indicators\ind_rsi_ma_zl.afl"
+#include "..\indicators\ind_fibo.afl"
+
+// (phần dưới giống xpl_harm_eval_v1.afl: tính entry/SL/TP, MFE/MAE, AddColumn…)
+// Nếu bạn đã có file v1, chỉ cần copy nội dung v1 và thay phần include core bằng include mock ở trên.

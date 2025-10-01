@@ -1,0 +1,20 @@
+// devtest/ind_harmonic_core_mock.afl
+// MOCK core để test Exploration; KHÔNG dùng cho sản xuất.
+
+function cjvn_harm_hasPattern()     { return 1; }           // luôn có pattern
+function cjvn_harm_lastPatternId()  { return 1; }           // ví dụ Gartley=1
+function cjvn_harm_direction()      { return 1; }           // 1 = Bullish
+function cjvn_harm_prz_low()        { return C * 0.995; }   // PRZ giả
+function cjvn_harm_prz_high()       { return C * 1.005; }
+function cjvn_harm_completionBar()  { return Status("lastbarinrange"); } // =1 tại bar cuối
+
+function cjvn_harm_ratio_ab_xa()    { return 0.618; }
+function cjvn_harm_ratio_bc_ab()    { return 0.382; }
+function cjvn_harm_ratio_cd_bc()    { return 1.27; }
+function cjvn_harm_ratio_ad_xa()    { return 0.786; }
+
+function cjvn_harm_dev_ab()         { return 0; }
+function cjvn_harm_dev_bc()         { return 0; }
+function cjvn_harm_dev_cd()         { return 0; }
+function cjvn_harm_dev_ad()         { return 0; }
+function cjvn_harm_confluence_cnt() { return 3; }
