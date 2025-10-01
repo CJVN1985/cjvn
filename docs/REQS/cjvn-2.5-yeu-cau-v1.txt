@@ -1,0 +1,212 @@
+# 1) Đứng trên nhánh phát hành 2.5
+git switch release/2.5
+
+# 2) Tạo thư mục docs/REQS
+New-Item -ItemType Directory -Path docs\REQS -Force | Out-Null
+
+# 3) Ghi nội dung tài liệu yêu cầu vào file txt (UTF-8)
+$doc = @'
+CJVN 2.5 – TÀI LIỆU YÊU CẦU & ĐỊNH NGHĨA DỰ ÁN
+================================================
+
+1) MỤC TIÊU
+-----------
+- Xây dựng bộ thư viện AFL (AmiBroker Formula Language) chuẩn hoá, có thể tái sử dụng, tránh xung đột khi ghép module/strategy.
+- Chuẩn hoá quy trình phát triển (Git + GitHub Actions) với CI kiểm tra cơ bản, review qua Pull Request.
+- Phát hành phiên bản CJVN 2.5 (alpha → beta → stable), đảm bảo có baseline “bản gốc” để đối chiếu.
+- Amibroker 6.2
+
+2) PHẠM VI
+----------
+In-scope:
+1. Chiến lược demo để kiểm thử tích hợp (không tối ưu lợi nhuận ở giai đoạn này).Bao gồm các thông số:Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR
+
+2. Chuẩn hóa 
+	- các biến, 
+    
+=======
+A. Chuẩn dữ liệu bắt buộc tại thời điểm hoàn tất mô hình
+
+Nhận diện:
+
+harm_id (1=Gartley, 2=Bat, 3=Butterfly, 4=Crab, …)
+
+harm_dir (1 = Bullish PRZ, -1 = Bearish PRZ)
+
+harm_bar (DateTime bar hoàn tất)
+
+PRZ:
+
+harm_prz_low, harm_prz_high, harm_prz_mid = (low+high)/2
+
+harm_prz_width = high-low, harm_prz_width_pct = (width / Close) * 100
+
+Tỉ lệ (ratios) khi hoàn tất (theo XA, AB, BC, CD, AD; các giá trị đã đo được):
+
+harm_ab_xa (|AB|/|XA|)
+
+harm_bc_ab (|BC|/|AB|)
+
+harm_cd_bc (|CD|/|BC|) // projection/extension
+
+harm_ad_xa (|AD|/|XA|) // completion ratio
+
+harm_confluence_cnt = số tỉ lệ đạt trong tolerance đối với mẫu hợp lệ
+
+Các độ lệch tới mốc “chuẩn” (ví dụ Gartley: AD≈0.786, AB≈0.618, BC≈0.382/0.886, CD≈1.27…):
+harm_dev_ab, harm_dev_bc, harm_dev_cd, harm_dev_ad (giá trị tuyệt đối)
+
+Ngữ cảnh (tại bar hoàn tất):
+
+rsi, rsi_ma, psar_dir, bb_squeeze (BB inside KC), trend_up (EMA21>EMA55)
+
+Khoảng cách % tới BB/KC/Fibo 38/50/61: dist_to_bb_u/l, near_fibo (±tol%)
+
+B. Entry/SL/TP chuẩn hoá (để đánh giá win-rate đồng nhất)
+
+entry_price = harm_prz_mid (mặc định) hoặc Close của bar xác nhận (param).
+
+Bullish: stop = harm_prz_low, Bearish: stop = harm_prz_high.
+
+risk_R = Abs(entry - stop).
+
+TP chuẩn:
+
+tp1 = entry + sign* 1.0 * risk_R
+
+tp2 = entry + sign* 2.0 * risk_R
+
+tpFib (tuỳ chọn): về lại Fibo 38/61 của AD hoặc/ và đường KC basis.
+
+Ghi which_tp nếu bạn chọn 1 TP chuẩn (ví dụ TP1 = 1R).
+
+C. Định nghĩa kết quả để thống kê
+
+Thời gian đánh giá: N_eval (mặc định 20 bar, param).
+
+Tính MFE_R (max favorable excursion / R) và MAE_R trong 20 bar sau bar hoàn tất.
+
+Win@1R: đạt ≥ 1R trước khi chạm SL? (bullish dùng HHV; bearish dùng LLV).
+
+Win@2R tương tự.
+
+Nhãn kết quả: outcome ∈ {HIT_TP, HIT_SL, NONE}.
+
+Lưu time_to_tp/time_to_sl (số bar).
+
+D. KPI mục tiêu & phân tích
+
+Win-rate theo tỉ lệ: nhóm (bin) theo harm_ad_xa (ví dụ 0.786±tol, 0.886±tol, 1.27±tol, 1.618±tol…), chéo harm_bc_ab & harm_cd_bc.
+
+Win-rate theo confluence: ≥2/3 tỉ lệ “đúng” có win-rate cao hơn?
+
+Ảnh hưởng ngữ cảnh: psar_dir đồng hướng, bb_squeeze, trend_up…
+
+Đầu ra phân tích: bảng pivot “pattern × bins(tỉ lệ) × dir → Win@1R/2R, MFE_R mean, time_to_tp median”.
+
+Dùng kết quả để ưu tiên tự động: khi mới có signal, chọn buy/sell theo bucket có win-rate cao nhất (và đủ điều kiện ngữ cảnh).
+
+
+	- quy tắc vị trí thứ tự các funcion dựa trên chức năng và phối hợp dựa trên
+		- function cung cấp dữ liệu đầu ra đứng trước
+		- function nào lấy dữ liệu để sử dụng đứng sau
+	- Bổ xung và kết hợp them các tham số so với phiên bản trước : thôn số Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR để phân tích explore và căn cứ để thiết lập rule buy sell
+- Thư viện core và indicators: Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR, Harmonic (skeleton + port v3).
+	 
+	
+- CI Linter kiểm tra trùng tên biến/hàm ở cấp top-level, flow PR/merge, tagging phiên bản.
+- Tài liệu hoá cách include, cấu hình tham số, ví dụ sử dụng.
+
+Out-of-scope (giai đoạn 2.5):
+- Tối ưu hoá chiến lược để giao dịch thực tế, quản lý rủi ro nâng cao, tối ưu tham số.
+- Xây dựng UI/Tool ngoài AmiBroker.
+
+3) CẤU TRÚC MÃ & QUY ƯỚC
+------------------------
+Thư mục chuẩn:
+- src/
+  - utils/         (hàm tiện ích, không Plot, không trạng thái toàn cục)
+  - indicators/    (chỉ báo, có thể Plot, xuất các series “ind_*”)
+  - strategies/    (chiến lược tham chiếu, chỉ để demo/test)
+- docs/
+  - reference/     (bản gốc, baseline – KHÔNG dùng trong runtime)
+- tools/
+  - afl_lint.py    (linter kiểm tra trùng tên biến/hàm ở cấp top-level)
+Quy ước dùng code.
+- không dùng những công thức, thuật toán, ký tự mà Amiborker không hỗ trợ
+- ưu tiên dùng những thuật toán, công thức đã có, biến có sãn của amibroker cung cấp.
+- Tham khảo công thức, thuật toán có sẵn trong thư viện, nếu không có thì mới tìm công thức khác.
+Quy ước đặt tên:
+- Tiền tố: `util_*` (tiện ích), `ind_*` (indicator), `strat_*` (chiến lược), `cjvn_*` (API/hàm lõi).
+- Mọi biến/hàm public phải có tiền tố theo module để tránh xung đột (ví dụ `ind_bb_*`, `ind_kc_*`, `ind_psar_*`, `ind_fibo_*`, `ind_rsi_*`, `cjvn_*`).
+- Không khai báo trạng thái toàn cục trừ khi dùng StaticVar, và phải namespaced: `cjvn_<key>`.
+
+Include:
+- Trong repo: `#include "..\utils\..."`, `#include "..\indicators\..."`.
+- Khi cài vào AmiBroker: copy vào `Formulas\Include\cjvn\` → `#include <cjvn/...>`.
+
+4) CÁC MODULE/CHỈ BÁO BẮT BUỘC
+-------------------------------
+4.1) Fibo
+- Core: `cjvn_fibo_ret(ret, pctH, HiLB, pctL, LoLB)`, `cjvn_fibo_p00()`, `cjvn_fibo_p100()` – không Plot.
+- Indicator: xuất series `ind_fibo_{0,236,382,500,618,786,100,127,162,200,262,424}`, có tuỳ chọn Plot/Text.
+- Tham số: `Pivot Hi/Lo %`, `Hi/Lo LookBack`, `Back/Fwd`, `Text Shift`, `Line Style`.
+- Không dùng global; logic bám theo bản gốc, đảm bảo tương thích.
+- Có biến đầu ra cho rule buy sell, và explore có thể sử dụng
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.2) RSI_MA_ZL
+- Util: `cjvn_zlema(series, len)`.
+- Indicator: `RSI` gốc + smoothing chọn `SMA|EMA|WMA|ZLEMA` → `ind_rsi_ma`, tín hiệu `ind_rsi_buy/sell` (tham khảo).
+- tín hiệu RSI có thể lựa chọn nguồn low, high
+- đường SMA 21
+- không vẽ , mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+- Có thể tùy chỉnh tham số RSI, SMA
+4.3) Bollinger Bands
+- Basis = MA chọn `SMA|EMA|WMA|DEMA`; dev = `StDev(C, len)`.
+- Xuất: `ind_bb_basis/upper/lower`, tín hiệu tham khảo cross.
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.4) Keltner Channel
+- Basis = `EMA(C, lenEMA)`, band = `ATR(lenATR)*mult`.
+- đường ema 21
+- Xuất: `ind_kc_basis/upper/lower`, tín hiệu tham khảo cross.
+- có ther on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.5) Parabolic SAR
+- `ind_psar_val = SAR(af, max)`, `ind_psar_dir` (1/-1), tín hiệu đảo chiều chuẩn.
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.6) Chức năng explore
+- Bổ xung thêm cột thông tin để phân tích:
+	- target
+	- stoploss
+	- tín hiệu RSI, MA, Bolinger, SAR, keltner tại thời điểm vào lệnh
+	- SAR có so sanh trên bolinger band hoay dưới bolinger band
+	- loại lệnh long, short
+	- thông tin Support và REs tại thười điểm vào lệnh bao gồm
+		- Res/ sup gốc của harmonic
+		- res/ sup của Chatgpt code
+	
+4.7) Harmonic (v3 → core mới)
+- Skeleton Core API (không Plot, không global):
+  - `cjvn_harm_lastPatternId()`  // 1=Gartley,2=Bat,3=Butterfly,4=Crab,…
+  - `cjvn_harm_hasPattern()`
+  - `cjvn_harm_direction()`      // 1=long PRZ, -1=short PRZ
+  - `cjvn_harm_prz_low()` / `cjvn_harm_prz_high()`
+  - `cjvn_harm_completionBar()`
+- Tác riêng rule buy, sell
+- Wrapper Indicator: vẽ PRZ (low/high), nhãn mẫu.
+- Backlog port từ bản gốc v3:
+  - Pivots fractal/zigzag + confirmBars (khóa pivot, chống repaint).
+  - Kiểm tra các tỉ lệ (Gartley/Bat/Butterfly/Crab) với tolerance cấu hình.
+  - PRZ = confluence (XA, AB=CD, BC proj/exp), độ rộng vùng.
+  - Quy tắc chọn mẫu khi trùng lặp (PRZ hẹp, gần giá, độ tin cậy).
+  - Xác nhận tín hiệu (đóng nến trong/thoát PRZ, filter RSI/Volume – tùy chọn).
+4.8) chức năng thông báo telegram
+- bổ sung tính năng tự resfresh tranh bị treo khi chạy lâu
+- bổ sung thêm thông tin thông báo:
+	Res /Sup tại thời điểm báo tin: 
+	-	h_res/ h_sup
+	- 	c_res / c_sup C
+
+5) CHẤT LƯỢNG & KIỂM THỬ
+------------------------
+- Linter (tools
