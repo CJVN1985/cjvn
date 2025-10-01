@@ -1,0 +1,128 @@
+# 1) Đứng trên nhánh phát hành 2.5
+git switch release/2.5
+
+# 2) Tạo thư mục docs/REQS
+New-Item -ItemType Directory -Path docs\REQS -Force | Out-Null
+
+# 3) Ghi nội dung tài liệu yêu cầu vào file txt (UTF-8)
+$doc = @'
+CJVN 2.5 – TÀI LIỆU YÊU CẦU & ĐỊNH NGHĨA DỰ ÁN
+================================================
+
+1) MỤC TIÊU
+-----------
+- Xây dựng bộ thư viện AFL (AmiBroker Formula Language) chuẩn hoá, có thể tái sử dụng, tránh xung đột khi ghép module/strategy.
+- Chuẩn hoá quy trình phát triển (Git + GitHub Actions) với CI kiểm tra cơ bản, review qua Pull Request.
+- Phát hành phiên bản CJVN 2.5 (alpha → beta → stable), đảm bảo có baseline “bản gốc” để đối chiếu.
+- Amibroker 6.2
+
+2) PHẠM VI
+----------
+In-scope:
+1. Chiến lược demo để kiểm thử tích hợp (không tối ưu lợi nhuận ở giai đoạn này).Bao gồm các thông số:Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR
+
+2. Chuẩn hóa 
+	- các biến, 
+	- quy tắc vị trí thứ tự các funcion dựa trên chức năng và phối hợp dựa trên
+		- function cung cấp dữ liệu đầu ra đứng trước
+		- function nào lấy dữ liệu để sử dụng đứng sau
+	- Bổ xung và kết hợp them các tham số so với phiên bản trước : thôn số Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR để phân tích explore và căn cứ để thiết lập rule buy sell
+- Thư viện core và indicators: Fibo, RSI_MA_ZL (kèm ZLEMA), Bollinger Bands, Keltner Channel, Parabolic SAR, Harmonic (skeleton + port v3).
+	 
+	
+- CI Linter kiểm tra trùng tên biến/hàm ở cấp top-level, flow PR/merge, tagging phiên bản.
+- Tài liệu hoá cách include, cấu hình tham số, ví dụ sử dụng.
+
+Out-of-scope (giai đoạn 2.5):
+- Tối ưu hoá chiến lược để giao dịch thực tế, quản lý rủi ro nâng cao, tối ưu tham số.
+- Xây dựng UI/Tool ngoài AmiBroker.
+
+3) CẤU TRÚC MÃ & QUY ƯỚC
+------------------------
+Thư mục chuẩn:
+- src/
+  - utils/         (hàm tiện ích, không Plot, không trạng thái toàn cục)
+  - indicators/    (chỉ báo, có thể Plot, xuất các series “ind_*”)
+  - strategies/    (chiến lược tham chiếu, chỉ để demo/test)
+- docs/
+  - reference/     (bản gốc, baseline – KHÔNG dùng trong runtime)
+- tools/
+  - afl_lint.py    (linter kiểm tra trùng tên biến/hàm ở cấp top-level)
+Quy ước dùng code.
+- không dùng những công thức, thuật toán, ký tự mà Amiborker không hỗ trợ
+- ưu tiên dùng những thuật toán, công thức đã có, biến có sãn của amibroker cung cấp.
+- Tham khảo công thức, thuật toán có sẵn trong thư viện, nếu không có thì mới tìm công thức khác.
+Quy ước đặt tên:
+- Tiền tố: `util_*` (tiện ích), `ind_*` (indicator), `strat_*` (chiến lược), `cjvn_*` (API/hàm lõi).
+- Mọi biến/hàm public phải có tiền tố theo module để tránh xung đột (ví dụ `ind_bb_*`, `ind_kc_*`, `ind_psar_*`, `ind_fibo_*`, `ind_rsi_*`, `cjvn_*`).
+- Không khai báo trạng thái toàn cục trừ khi dùng StaticVar, và phải namespaced: `cjvn_<key>`.
+
+Include:
+- Trong repo: `#include "..\utils\..."`, `#include "..\indicators\..."`.
+- Khi cài vào AmiBroker: copy vào `Formulas\Include\cjvn\` → `#include <cjvn/...>`.
+
+4) CÁC MODULE/CHỈ BÁO BẮT BUỘC
+-------------------------------
+4.1) Fibo
+- Core: `cjvn_fibo_ret(ret, pctH, HiLB, pctL, LoLB)`, `cjvn_fibo_p00()`, `cjvn_fibo_p100()` – không Plot.
+- Indicator: xuất series `ind_fibo_{0,236,382,500,618,786,100,127,162,200,262,424}`, có tuỳ chọn Plot/Text.
+- Tham số: `Pivot Hi/Lo %`, `Hi/Lo LookBack`, `Back/Fwd`, `Text Shift`, `Line Style`.
+- Không dùng global; logic bám theo bản gốc, đảm bảo tương thích.
+- Có biến đầu ra cho rule buy sell, và explore có thể sử dụng
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.2) RSI_MA_ZL
+- Util: `cjvn_zlema(series, len)`.
+- Indicator: `RSI` gốc + smoothing chọn `SMA|EMA|WMA|ZLEMA` → `ind_rsi_ma`, tín hiệu `ind_rsi_buy/sell` (tham khảo).
+- tín hiệu RSI có thể lựa chọn nguồn low, high
+- đường SMA 21
+- không vẽ , mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+- Có thể tùy chỉnh tham số RSI, SMA
+4.3) Bollinger Bands
+- Basis = MA chọn `SMA|EMA|WMA|DEMA`; dev = `StDev(C, len)`.
+- Xuất: `ind_bb_basis/upper/lower`, tín hiệu tham khảo cross.
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.4) Keltner Channel
+- Basis = `EMA(C, lenEMA)`, band = `ATR(lenATR)*mult`.
+- đường ema 21
+- Xuất: `ind_kc_basis/upper/lower`, tín hiệu tham khảo cross.
+- có ther on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.5) Parabolic SAR
+- `ind_psar_val = SAR(af, max)`, `ind_psar_dir` (1/-1), tín hiệu đảo chiều chuẩn.
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+- có thể on off. mặc định không on, chủ yếu xuát tín hiệu cho explore và rule buye sell
+4.6) Chức năng explore
+- Bổ xung thêm cột thông tin để phân tích:
+	- target
+	- stoploss
+	- tín hiệu RSI, MA, Bolinger, SAR, keltner tại thời điểm vào lệnh
+	- SAR có so sanh trên bolinger band hoay dưới bolinger band
+	- loại lệnh long, short
+	- thông tin Support và REs tại thười điểm vào lệnh bao gồm
+		- Res/ sup gốc của harmonic
+		- res/ sup của Chatgpt code
+	
+4.7) Harmonic (v3 → core mới)
+- Skeleton Core API (không Plot, không global):
+  - `cjvn_harm_lastPatternId()`  // 1=Gartley,2=Bat,3=Butterfly,4=Crab,…
+  - `cjvn_harm_hasPattern()`
+  - `cjvn_harm_direction()`      // 1=long PRZ, -1=short PRZ
+  - `cjvn_harm_prz_low()` / `cjvn_harm_prz_high()`
+  - `cjvn_harm_completionBar()`
+- Tác riêng rule buy, sell
+- Wrapper Indicator: vẽ PRZ (low/high), nhãn mẫu.
+- Backlog port từ bản gốc v3:
+  - Pivots fractal/zigzag + confirmBars (khóa pivot, chống repaint).
+  - Kiểm tra các tỉ lệ (Gartley/Bat/Butterfly/Crab) với tolerance cấu hình.
+  - PRZ = confluence (XA, AB=CD, BC proj/exp), độ rộng vùng.
+  - Quy tắc chọn mẫu khi trùng lặp (PRZ hẹp, gần giá, độ tin cậy).
+  - Xác nhận tín hiệu (đóng nến trong/thoát PRZ, filter RSI/Volume – tùy chọn).
+4.8) chức năng thông báo telegram
+- bổ sung tính năng tự resfresh tranh bị treo khi chạy lâu
+- bổ sung thêm thông tin thông báo:
+	Res /Sup tại thời điểm báo tin: 
+	-	h_res/ h_sup
+	- 	c_res / c_sup C
+
+5) CHẤT LƯỢNG & KIỂM THỬ
+------------------------
+- Linter (tools

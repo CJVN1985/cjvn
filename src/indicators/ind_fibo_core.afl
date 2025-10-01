@@ -1,0 +1,59 @@
+/* CJVN core: Fibonacci level for arbitrary ratio 'ret'
+   Returns price series (array) for that Fib level using last selected pivots.
+   All locals -> no global state, safe to include anywhere.
+*/
+function cjvn_fibo_ret(ret, pctH, HiLB, pctL, LoLB)
+{
+    x = BarIndex();
+
+    // Recent swing pivots based on percentages & lookbacks
+    pRp  = PeakBars( H, pctH, 1 ) == 0;
+    yRp0 = SelectedValue( ValueWhen( pRp, H, HiLB ) );
+    xRp0 = SelectedValue( ValueWhen( pRp, x, HiLB ) );
+
+    pSp  = TroughBars( L, pctL, 1 ) == 0;
+    ySp0 = SelectedValue( ValueWhen( pSp, L, LoLB ) );
+    xSp0 = SelectedValue( ValueWhen( pSp, x, LoLB ) );
+
+    Delta  = yRp0 - ySp0;
+    retval = (Delta * ret);
+
+    // If last swing is Low->High (xSp0 < xRp0): levels measured up from Low
+    // If last swing is High->Low (xSp0 > xRp0): levels measured down from High
+    Fibval =
+        IIf( ret < 1.0 AND xSp0 < xRp0, yRp0 - retval,
+        IIf( ret < 1.0 AND xSp0 > xRp0, ySp0 + retval,
+        IIf( ret > 1.0 AND xSp0 < xRp0, yRp0 - retval,
+        IIf( ret > 1.0 AND xSp0 > xRp0, ySp0 + retval, Null ))));
+
+    return Fibval;
+}
+
+// Helper: 0% & 100% anchors as series (for labels/text)
+function cjvn_fibo_p00(pctH, HiLB, pctL, LoLB)
+{
+    x   = BarIndex();
+    pRp = PeakBars( H, pctH, 1 ) == 0;
+    pSp = TroughBars( L, pctL, 1 ) == 0;
+
+    yRp0 = SelectedValue( ValueWhen( pRp, H, HiLB ) );
+    xRp0 = SelectedValue( ValueWhen( pRp, x, HiLB ) );
+    ySp0 = SelectedValue( ValueWhen( pSp, L, LoLB ) );
+    xSp0 = SelectedValue( ValueWhen( pSp, x, LoLB ) );
+
+    return IIf( xSp0 > xRp0, ySp0, yRp0 );
+}
+
+function cjvn_fibo_p100(pctH, HiLB, pctL, LoLB)
+{
+    x   = BarIndex();
+    pRp = PeakBars( H, pctH, 1 ) == 0;
+    pSp = TroughBars( L, pctL, 1 ) == 0;
+
+    yRp0 = SelectedValue( ValueWhen( pRp, H, HiLB ) );
+    xRp0 = SelectedValue( ValueWhen( pRp, x, HiLB ) );
+    ySp0 = SelectedValue( ValueWhen( pSp, L, LoLB ) );
+    xSp0 = SelectedValue( ValueWhen( pSp, x, LoLB ) );
+
+    return IIf( xSp0 < xRp0, ySp0, yRp0 );
+}

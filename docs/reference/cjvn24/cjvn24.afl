@@ -2,8 +2,8 @@
 _SECTION_BEGIN("CJVN Telegram Drop-In v2.4");
 
 // ===== [A] OPTIONS =====
-TG_API    = ParamStr ("Telegram Bot API Token",   "7860235529:AAEdu_a_inL3O92Fh3AHm88KIHy-0ag1YFo");
-TG_CHAT   = ParamStr ("Telegram Chat/Group ID",   "-1002775328367");
+TG_API    = ParamStr ("Telegram Bot API Token",   "***");
+TG_CHAT   = ParamStr ("Telegram Chat/Group ID",   "***");
 TG_Enable = ParamToggle("Enable Alerts",          "No|Yes", 1);
 
 TG_TestBtn    = ParamTrigger("Send Test",         "Click");

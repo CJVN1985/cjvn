@@ -1,8 +1,16 @@
-/* CJVN util: chọn loại MA theo chuỗi "SMA|EMA|WMA|DEMA" */
-function cjvn_ma(src, len, maType)
+// CJVN util: MA selector by string: "SMA" | "EMA" | "WMA" | "DEMA" | "TEMA"
+function cjvn_ma( src, len, maType )
 {
-    if (maType == "EMA")  return EMA(src, len);
-    if (maType == "WMA")  return WMA(src, len);
-    if (maType == "DEMA") return DEMA(src, len);
-    return MA(src, len); // mặc định: SMA
+    len = Max( 1, Nz( len, 1 ) );
+
+    m = "" + maType;                  // force to string
+    out = EMA( src, len );            // default
+
+    if      ( m == "SMA"  OR m == "sma" )  out = MA  ( src, len );
+    else if ( m == "EMA"  OR m == "ema" )  out = EMA ( src, len );
+    else if ( m == "WMA"  OR m == "wma" )  out = WMA ( src, len );
+    else if ( m == "DEMA" OR m == "dema")  out = DEMA( src, len );
+    else if ( m == "TEMA" OR m == "tema")  out = TEMA( src, len );
+
+    return out;
 }

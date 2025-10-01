@@ -5,14 +5,29 @@ SetBarsRequired(10000, 0);
 SetOption("NoDefaultColumns", True);
 
 // include mock thay vì core
-#include "..\..\devtest\ind_harmonic_core_mock.afl"
+// include mock thay vì core
+#include "C:\\cjvn\\devtest\\ind_harmonic_core_mock.afl"
 
 // các indicator ngữ cảnh vẫn dùng bình thường
-#include "..\indicators\ind_bb.afl"
-#include "..\indicators\ind_keltner.afl"
-#include "..\indicators\ind_psar.afl"
-#include "..\indicators\ind_rsi_ma_zl.afl"
-#include "..\indicators\ind_fibo.afl"
+#include "C:\\cjvn\\src\\indicators\\ind_bb.afl"
+#include "C:\\cjvn\\src\\indicators\ind_keltner.afl"
+#include "C:\\cjvn\\src\\indicators\ind_psar.afl"
+#include "C:\\cjvn\\src\\indicators\ind_rsi_zl_mod.afl"
+#include "C:\\cjvn\\src\\indicators\ind_fibo_core.afl"
 
 // (phần dưới giống xpl_harm_eval_v1.afl: tính entry/SL/TP, MFE/MAE, AddColumn…)
 // Nếu bạn đã có file v1, chỉ cần copy nội dung v1 và thay phần include core bằng include mock ở trên.
+
+// --- Exploration (bảng kết quả)
+SetOption("NoDefaultColumns", True);
+
+// chỉ liệt kê tại những bar có tín hiệu
+// (hoặc dùng Filter = 1; để liệt kê tất cả bar trong khoảng chọn)
+Filter = Buy OR Sell;
+
+// cột hiển thị
+AddTextColumn( Name(), "Symbol" );
+AddColumn( DateTime(), "Date/Time", formatDateTime );
+AddColumn( C, "Close", 1.2 );
+AddColumn( Sma, "SMA", 1.2 );
+AddTextColumn( IIf(Buy, "BUY", IIf(Sell,"SELL","")), "Signal" );

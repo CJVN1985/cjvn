@@ -1,0 +1,75 @@
+/* CJVN – MODIFIED RSI (Zero-Lag double EMA variant)
+   Nguồn tham khảo: bản RSI bạn gửi; được chuẩn hoá để dùng như module:
+   - Xuất series: 
+       ind_rsi_mod_raw   (RSI gốc)
+       ind_rsi_mod_zl    (RSI qua Zero-Lag EMA kiểu 2xEMA)
+       ind_rsi_mod_buy   (tín hiệu tham khảo)
+       ind_rsi_mod_sell  (tín hiệu tham khảo)
+       ind_rsi_mod_upper / ind_rsi_mod_lower (ngưỡng)
+   - Mặc định KHÔNG vẽ (Plot=Off). Bật Plot để xem trực quan.
+   - Không tạo trạng thái toàn cục, không dùng Graph*.
+*/
+
+SetBarsRequired( 10000, 0 );
+
+/* ===== Params ===== */
+ind_rsi_len   = Param( "RSI Length", 14, 2, 200, 1 );
+ind_upper     = Param( "Upper Limit", 70, 0, 100, 1 );
+ind_lower     = Param( "Lower Limit", 30, 0, 100, 1 );
+
+ind_src       = ParamList( "RSI Source", "Close|High|Low|Typical", 0 );
+sig_source    = ParamList( "Signal uses", "RAW|ZL", 0 ); // dùng RSI gốc hay RSI đã ZL cho tín hiệu Cross
+
+// Zero-Lag kiểu double-EMA như code gốc
+zl_p1         = Param( "ZL EMA1", 10, 2, 300, 1 );
+zl_p2         = Param( "ZL EMA2", 10, 2, 300, 1 );
+ma_sig_len    = Param( "Signal SMA on ZL", 5, 1, 300, 1 );
+
+plot_toggle   = ParamToggle( "Plot", "Off|On", 0 );
+plot_arrows   = ParamToggle( "Plot arrows", "Off|On", 0 );
+
+/* ===== Nguồn RSI ===== */
+price = Close;
+if( ind_src == "High" )      price = High;
+else if( ind_src == "Low" )  price = Low;
+else if( ind_src == "Typical" ) price = ( H + L + C ) / 3;
+
+/* ===== RSI RAW ===== */
+ind_rsi_mod_raw = RSIa( price, ind_rsi_len );   // 0..100
+
+/* ===== Zero-Lag variant (double EMA) =====
+   EMA1 = EMA(R, p1)
+   EMA2 = EMA(EMA1, p2)
+   ZL   = EMA1 + (EMA1 - EMA2)
+   (giữ nguyên biên RSI, KHÔNG lấy abs như code tham khảo)
+*/
+ema1 = EMA( ind_rsi_mod_raw, zl_p1 );
+ema2 = EMA( ema1,            zl_p2 );
+ind_rsi_mod_zl = ema1 + ( ema1 - ema2 );
+
+// SMA mịn cho đường ZL (tuỳ chọn dùng trong Explore)
+ind_rsi_mod_zl_sma = MA( ind_rsi_mod_zl, ma_sig_len );
+
+/* ===== Tín hiệu tham khảo (Cross) ===== */
+sig_base = IIf( sig_source == "ZL", ind_rsi_mod_zl, ind_rsi_mod_raw );
+ind_rsi_mod_buy  = Cross( sig_base, ind_lower )   AND sig_base > ind_lower;
+ind_rsi_mod_sell = Cross( ind_upper, sig_base )   AND sig_base < ind_upper;
+
+// Xuất thêm series ngưỡng để tiện Explore/Rule
+ind_rsi_mod_upper = ind_upper;
+ind_rsi_mod_lower = ind_lower;
+
+/* ===== Plot (mặc định Off) ===== */
+if( plot_toggle )
+{
+    Plot( ind_rsi_mod_raw, "RSI", colorGrey50, styleLine );
+    Plot( ind_rsi_mod_zl,  "RSI_ZL", colorBlue, styleLine );
+    Plot( ind_upper, "Overbought", colorRed, styleDashed );
+    Plot( ind_lower, "Oversold",   colorGreen, styleDashed );
+
+    if( plot_arrows )
+    {
+        PlotShapes( IIf( ind_rsi_mod_sell, shapeDownArrow, shapeNone ), colorRed,   0, ind_rsi_mod_zl,  0 );
+        PlotShapes( IIf( ind_rsi_mod_buy,  shapeUpArrow,   shapeNone ), colorGreen, 0, ind_rsi_mod_zl,  0 );
+    }
+}
